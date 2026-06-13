@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-900 antialiased;
+    font-family: 'Inter', sans-serif;
+  }
+}
+
+/* Custom Utilities for premium Indian aesthetics */
+@layer utilities {
+  .glass-card {
+    @apply bg-white/80 backdrop-blur-md shadow-xl border border-white/20 rounded-2xl;
+  }
+  
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary-600 to-indigo-600;
+  }
+}

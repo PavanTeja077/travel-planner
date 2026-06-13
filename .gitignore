@@ -1,0 +1,16 @@
+# Dependencies
+node_modules/
+
+# Environment Variables (Keep secrets out of GitHub!)
+.env
+
+# Production Build
+dist/
+build/
+
+# Uploads
+backend/uploads/
+frontend/uploads/
+
+# Misc
+.DS_Store
