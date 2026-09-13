@@ -46,7 +46,6 @@ const geocodePlace = async (placeName, baseLocation = '') => {
       };
     }
   } catch (err) {
-    // If specific place lookup fails, try just placeName
     try {
       const fallbackRes = await axios.get(
         `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(placeName)}&limit=1`,
@@ -71,38 +70,59 @@ const geocodePlace = async (placeName, baseLocation = '') => {
 /**
  * Generates an automated itinerary using Gemini AI with fallback models and keys
  */
-const generateItineraryPlan = async ({ destination, startingFrom = '', days = 3, budget = 'moderate', preferences = '' }) => {
+const generateItineraryPlan = async ({ 
+  destination, 
+  startingFrom = '', 
+  days = 3, 
+  startDate = null,
+  budget = 'moderate', 
+  preferences = '' 
+}) => {
   const apiKeys = getApiKeys();
   if (apiKeys.length === 0) {
     throw new Error('No Gemini API key found. Please set GEMINI_API_KEY in your backend .env file.');
   }
 
+  const baseDate = startDate ? new Date(startDate) : new Date();
+  const formattedStartDate = baseDate.toLocaleDateString('en-US', {
+    weekday: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
+
   const prompt = `
-You are an expert travel assistant. Create a detailed, actionable, day-by-day travel itinerary for a trip to "${destination}".
-Trip Details:
-- Starting from: ${startingFrom || 'origin'}
-- Duration: ${days} days
-- Budget style: ${budget}
-- Preferences / Notes: ${preferences || 'Balanced mix of must-see sights, culture, relaxation, and local culinary experiences.'}
+You are an expert, highly meticulous travel planner. Create an exact, structured, day-by-day travel itinerary for a trip to "${destination}".
 
-Requirements:
-1. Include transportation/trains/flights options to travel to or around the destination.
-2. Include recommended accommodations/hotels matching the budget.
-3. Include must-try local food and restaurants/cafes.
-4. Include top activities and sightseeing with realistic timings.
-5. Provide actionable booking or reference URLs for each item:
-   - For hotels/accommodations: use direct Booking.com search URL (e.g., https://www.booking.com/searchresults.html?ss=...)
-   - For trains/transportation: use IRCTC, Trainline, Skyscanner, or Google Flights URL (e.g., https://www.google.com/travel/flights or https://www.makemytrip.com/railways/)
-   - For food & activities: provide Google Maps search or TripAdvisor/booking links (e.g., https://www.google.com/maps/search/?api=1&query=...)
+Trip Parameters:
+- Source / Starting From: ${startingFrom ? startingFrom : 'Detect closest hub/origin based on destination'}
+- Destination: ${destination}
+- Duration: exactly ${days} days
+- Trip Start Date: ${formattedStartDate}
+- Budget Category: ${budget} (budget / moderate / luxury)
+- Preferences & Interests: ${preferences || 'Well-rounded itinerary with iconic landmarks, local food, culture, and relaxation.'}
 
-Return ONLY a valid, raw JSON array of objects. Do not wrap in markdown or backticks if possible, or ensure it is valid JSON. Each object must have the following schema:
+Strict Rules:
+1. Break down the plan into exactly Day 1 up to Day ${days}.
+2. For Day 1, specify transportation from "${startingFrom || 'user origin'}" to "${destination}" (trains/flights options with real booking search URLs: Google Flights, Skyscanner, or IRCTC/MakeMyTrip).
+3. Recommend best accommodations/hotels suitable for the "${budget}" budget with direct Booking.com search links.
+4. Include authentic local restaurants, cafes, or street food hubs with specific breakfast, lunch, and dinner suggestions.
+5. For activities, provide specific timings (e.g. "09:00 AM", "01:30 PM", "05:00 PM") and realistic durations.
+6. Provide valid, clickable direct booking or map links:
+   - Flight/Train: https://www.google.com/travel/flights?q=... or IRCTC/MakeMyTrip link
+   - Hotels: https://www.booking.com/searchresults.html?ss=...
+   - Food/Sightseeing: https://www.google.com/maps/search/?api=1&query=...
+
+Return strictly a valid JSON array of objects. Do not include extra text outside the JSON. Schema:
 [
   {
-    "location": "Name of the place, hotel, restaurant, or station",
-    "time": "e.g., Day 1 - Morning (09:00 AM)",
+    "dayNumber": 1,
+    "time": "09:00 AM",
+    "timeSlot": "Morning",
+    "location": "Specific place name, station, hotel or landmark",
     "desc": "Detailed description of what to do, what to see, or why to stay/eat here.",
     "type": "transport" | "hotel" | "food" | "activity",
-    "notes": "Helpful tips, estimated cost, opening hours, or special advice",
+    "notes": "Helpful tips, estimated cost in local currency, dress code or hours",
     "bookingLink": "https://..."
   }
 ]
@@ -110,11 +130,9 @@ Return ONLY a valid, raw JSON array of objects. Do not wrap in markdown or backt
 
   let lastError = null;
 
-  // Try each API key
   for (const apiKey of apiKeys) {
     const ai = new GoogleGenAI({ apiKey });
 
-    // Try each model fallback in priority order
     for (const modelName of MODELS) {
       try {
         console.log(`[Gemini] Attempting itinerary generation with model: ${modelName}`);
@@ -140,7 +158,6 @@ Return ONLY a valid, raw JSON array of objects. Do not wrap in markdown or backt
           throw new Error('Empty response received from Gemini');
         }
 
-        // Clean any markdown formatting if present
         let cleanJson = responseText.trim();
         if (cleanJson.startsWith('```json')) {
           cleanJson = cleanJson.replace(/^```json/, '').replace(/```$/, '').trim();
@@ -153,20 +170,31 @@ Return ONLY a valid, raw JSON array of objects. Do not wrap in markdown or backt
           throw new Error('Gemini response is not an array');
         }
 
-        // Geocode items in parallel (with concurrency limit/graceful fallback)
+        // Geocode items in parallel and compute exact dates
         const enrichedItems = await Promise.all(
           items.map(async (item) => {
             const coords = await geocodePlace(item.location, destination);
+            
+            const dayOffset = Math.max(0, (parseInt(item.dayNumber) || 1) - 1);
+            const itemDate = new Date(baseDate.getTime() + dayOffset * 24 * 60 * 60 * 1000);
+
+            // Ensure bookingLink has a good fallback Google Maps URL if empty
+            let finalBookingLink = item.bookingLink;
+            if (!finalBookingLink || !finalBookingLink.startsWith('http')) {
+              finalBookingLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.location + ' ' + destination)}`;
+            }
+
             return {
               location: item.location,
-              time: item.time || '',
+              dayNumber: item.dayNumber || (dayOffset + 1),
+              time: item.time || `${item.timeSlot || 'Day ' + (dayOffset + 1)}`,
               notes: item.notes || item.time || '',
               desc: item.desc || '',
               type: item.type || 'activity',
-              bookingLink: item.bookingLink || '',
+              bookingLink: finalBookingLink,
               lat: coords.lat,
               lng: coords.lng,
-              date: new Date()
+              date: itemDate
             };
           })
         );
@@ -177,7 +205,6 @@ Return ONLY a valid, raw JSON array of objects. Do not wrap in markdown or backt
       } catch (err) {
         console.warn(`[Gemini] Failed with model ${modelName}:`, err.message || err);
         lastError = err;
-        // Continue to the next fallback model
       }
     }
   }

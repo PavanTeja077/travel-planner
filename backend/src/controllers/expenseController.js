@@ -65,13 +65,17 @@ const addExpense = async (req, res) => {
       amount: splitAmount
     }));
 
+    const payerId = req.body.paidBy || req.user._id;
+
     const newExpense = await Expense.create({
       itineraryId: req.params.itineraryId,
       description: desc,
       amount: Number(amount),
-      paidBy: req.user._id, // Real authenticated user
+      paidBy: payerId,
       splitAmong: splitAmong
     });
+
+    await newExpense.populate('paidBy', 'name');
 
     res.status(201).json(newExpense);
   } catch (error) {

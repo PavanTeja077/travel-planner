@@ -181,10 +181,10 @@ const deleteDestination = async (req, res) => {
 };
 
 // @route   POST /api/itineraries/:id/ai-generate
-// @desc    Generate AI itinerary recommendations and add them
+// @desc    Generate AI itinerary recommendations and add them to existing trip
 const generateAIItinerary = async (req, res) => {
   try {
-    const { destination, startingFrom, days, budget, preferences } = req.body;
+    const { destination, startingFrom, days, startDate, budget, preferences } = req.body;
     if (!destination) {
       return res.status(400).json({ message: 'Destination is required' });
     }
@@ -195,19 +195,26 @@ const generateAIItinerary = async (req, res) => {
     }
 
     const { generateItineraryPlan } = require('../utils/geminiService');
+    const numDays = Number(days) || 3;
+    const tripStart = startDate ? new Date(startDate) : (itinerary.startDate || new Date());
+    const tripEnd = new Date(tripStart.getTime() + (numDays - 1) * 24 * 60 * 60 * 1000);
+
     const generatedItems = await generateItineraryPlan({
       destination,
       startingFrom,
-      days: Number(days) || 3,
+      days: numDays,
+      startDate: tripStart,
       budget: budget || 'moderate',
       preferences: preferences || ''
     });
 
     // Append generated items to destinations
     itinerary.destinations.push(...generatedItems);
+    itinerary.startDate = tripStart;
+    itinerary.endDate = tripEnd;
 
     // Update title if it's default
-    if (itinerary.title === 'New Trip' || itinerary.title === 'Trip Planner') {
+    if (itinerary.title === 'New Trip' || itinerary.title === 'Trip Planner' || itinerary.title === 'Next Adventure') {
       itinerary.title = `Trip to ${destination}`;
     }
 
@@ -216,12 +223,56 @@ const generateAIItinerary = async (req, res) => {
     res.json({
       message: 'AI Itinerary generated successfully',
       destinations: itinerary.destinations,
-      title: itinerary.title
+      title: itinerary.title,
+      startDate: itinerary.startDate,
+      endDate: itinerary.endDate
     });
   } catch (error) {
     console.error('AI Generation Error:', error);
     res.status(500).json({
       message: error.message || 'Failed to generate AI itinerary'
+    });
+  }
+};
+
+// @route   POST /api/itineraries/ai-create
+// @desc    Directly create a new itinerary with AI recommendations from Dashboard
+const createAIItinerary = async (req, res) => {
+  try {
+    const { destination, startingFrom, days, startDate, budget, preferences } = req.body;
+    if (!destination) {
+      return res.status(400).json({ message: 'Destination is required' });
+    }
+
+    const numDays = Number(days) || 3;
+    const tripStart = startDate ? new Date(startDate) : new Date();
+    const tripEnd = new Date(tripStart.getTime() + (numDays - 1) * 24 * 60 * 60 * 1000);
+
+    const { generateItineraryPlan } = require('../utils/geminiService');
+    const generatedItems = await generateItineraryPlan({
+      destination,
+      startingFrom,
+      days: numDays,
+      startDate: tripStart,
+      budget: budget || 'moderate',
+      preferences: preferences || ''
+    });
+
+    const newItinerary = await Itinerary.create({
+      title: `Trip to ${destination}`,
+      description: `AI-curated ${numDays}-day journey to ${destination} from ${startingFrom || 'origin'}`,
+      createdBy: req.user._id,
+      groupMembers: [req.user._id],
+      startDate: tripStart,
+      endDate: tripEnd,
+      destinations: generatedItems
+    });
+
+    res.status(201).json(newItinerary);
+  } catch (error) {
+    console.error('AI Creation Error:', error);
+    res.status(500).json({
+      message: error.message || 'Failed to create AI itinerary'
     });
   }
 };
@@ -235,5 +286,6 @@ module.exports = {
   updateItinerary,
   deleteItinerary,
   deleteDestination,
-  generateAIItinerary
+  generateAIItinerary,
+  createAIItinerary
 };

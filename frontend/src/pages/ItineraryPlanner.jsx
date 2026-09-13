@@ -14,8 +14,9 @@ import {
   AlertCircle, 
   X, 
   Calendar, 
-  DollarSign,
-  Plus
+  Plus,
+  LocateFixed,
+  Navigation
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import axios from 'axios';
@@ -33,16 +34,24 @@ const ItineraryPlanner = () => {
   const [newMemberEmail, setNewMemberEmail] = useState('');
   const [showMemberForm, setShowMemberForm] = useState(false);
 
-  // Title state
+  // Title & Dates state
   const [title, setTitle] = useState('Trip Planner');
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitleVal, setEditTitleVal] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   // AI Planner Modal State
   const [showAiModal, setShowAiModal] = useState(false);
   const [aiDestination, setAiDestination] = useState('');
   const [aiStartingFrom, setAiStartingFrom] = useState('');
+  const [isDetectingLocation, setIsDetectingLocation] = useState(false);
   const [aiDays, setAiDays] = useState(3);
+  const [aiStartDate, setAiStartDate] = useState(() => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return tomorrow.toISOString().split('T')[0];
+  });
   const [aiBudget, setAiBudget] = useState('moderate');
   const [aiPreferences, setAiPreferences] = useState('');
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
@@ -55,6 +64,8 @@ const ItineraryPlanner = () => {
         if (res.data.title) setTitle(res.data.title);
         if (res.data.destinations) setPlan(res.data.destinations);
         if (res.data.groupMembers) setGroupMembers(res.data.groupMembers);
+        if (res.data.startDate) setStartDate(res.data.startDate);
+        if (res.data.endDate) setEndDate(res.data.endDate);
       }
     } catch (error) {
       console.error('Failed to fetch itinerary', error);
@@ -64,6 +75,38 @@ const ItineraryPlanner = () => {
   useEffect(() => {
     fetchItinerary();
   }, [id]);
+
+  const handleDetectLocation = () => {
+    if (!navigator.geolocation) {
+      alert('Geolocation is not supported by your browser.');
+      return;
+    }
+    setIsDetectingLocation(true);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const { latitude, longitude } = position.coords;
+          const res = await axios.get(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=10`
+          );
+          const addr = res.data?.address;
+          const detectedCity = addr?.city || addr?.town || addr?.county || addr?.state || 'Current Location';
+          setAiStartingFrom(detectedCity);
+        } catch (err) {
+          console.error('Reverse geocode failed:', err);
+          setAiStartingFrom('Current Location');
+        } finally {
+          setIsDetectingLocation(false);
+        }
+      },
+      (err) => {
+        console.warn('Geolocation permission denied or error:', err);
+        setIsDetectingLocation(false);
+        alert('Could not retrieve current location. Please check browser permissions or type your city.');
+      },
+      { timeout: 8000 }
+    );
+  };
 
   const handleTitleSave = async () => {
     if (!editTitleVal.trim() || editTitleVal === title) {
@@ -140,6 +183,7 @@ const ItineraryPlanner = () => {
         destination: aiDestination,
         startingFrom: aiStartingFrom,
         days: aiDays,
+        startDate: aiStartDate,
         budget: aiBudget,
         preferences: aiPreferences
       });
@@ -147,6 +191,8 @@ const ItineraryPlanner = () => {
       if (res.data) {
         if (res.data.destinations) setPlan(res.data.destinations);
         if (res.data.title) setTitle(res.data.title);
+        if (res.data.startDate) setStartDate(res.data.startDate);
+        if (res.data.endDate) setEndDate(res.data.endDate);
         setShowAiModal(false);
         setAiDestination('');
         setAiStartingFrom('');
@@ -165,13 +211,13 @@ const ItineraryPlanner = () => {
       case 'transport':
         return (
           <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-            <Train className="h-3 w-3" /> Transport & Travel
+            <Train className="h-3 w-3" /> Transit & Flights
           </span>
         );
       case 'hotel':
         return (
           <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
-            <Hotel className="h-3 w-3" /> Accommodation
+            <Hotel className="h-3 w-3" /> Hotel & Stay
           </span>
         );
       case 'food':
@@ -183,7 +229,7 @@ const ItineraryPlanner = () => {
       default:
         return (
           <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-            <Compass className="h-3 w-3" /> Activity & Sights
+            <Compass className="h-3 w-3" /> Sights & Activity
           </span>
         );
     }
@@ -233,33 +279,43 @@ const ItineraryPlanner = () => {
             </div>
           </div>
 
-          {/* Title and Action Buttons */}
-          <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
-            {isEditingTitle ? (
-              <input 
-                type="text" 
-                value={editTitleVal} 
-                onChange={(e) => setEditTitleVal(e.target.value)}
-                onBlur={handleTitleSave}
-                onKeyDown={(e) => e.key === 'Enter' && handleTitleSave()}
-                autoFocus
-                className="text-lg font-bold bg-slate-100 border-none outline-none focus:ring-2 focus:ring-primary-500 rounded px-2 py-1 flex-1 text-slate-800"
-              />
-            ) : (
-              <h2 
-                className="text-lg font-bold cursor-pointer hover:bg-slate-50 rounded px-1.5 py-1 -ml-1 text-slate-800 truncate max-w-[200px]"
-                onClick={() => {
-                  setEditTitleVal(title);
-                  setIsEditingTitle(true);
-                }}
-                title="Click to edit trip name"
-              >
-                {title}
-              </h2>
-            )}
+          {/* Title, Dates, and Action Buttons */}
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <div>
+              {isEditingTitle ? (
+                <input 
+                  type="text" 
+                  value={editTitleVal} 
+                  onChange={(e) => setEditTitleVal(e.target.value)}
+                  onBlur={handleTitleSave}
+                  onKeyDown={(e) => e.key === 'Enter' && handleTitleSave()}
+                  autoFocus
+                  className="text-lg font-bold bg-slate-100 border-none outline-none focus:ring-2 focus:ring-primary-500 rounded px-2 py-1 text-slate-800"
+                />
+              ) : (
+                <h2 
+                  className="text-lg font-bold cursor-pointer hover:bg-slate-50 rounded px-1.5 py-1 -ml-1 text-slate-800 truncate max-w-[220px]"
+                  onClick={() => {
+                    setEditTitleVal(title);
+                    setIsEditingTitle(true);
+                  }}
+                  title="Click to edit trip name"
+                >
+                  {title}
+                </h2>
+              )}
+              {startDate && (
+                <div className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                  <Calendar className="h-3 w-3 text-slate-400" />
+                  <span>
+                    {new Date(startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    {endDate && ` – ${new Date(endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`}
+                  </span>
+                </div>
+              )}
+            </div>
 
             <div className="flex items-center gap-2">
-              {/* AI Planner Button */}
               <button
                 onClick={() => setShowAiModal(true)}
                 className="flex items-center gap-1.5 text-xs font-semibold bg-linear-to-r from-purple-600 to-indigo-600 text-white px-3 py-1.5 rounded-full hover:from-purple-700 hover:to-indigo-700 shadow-xs transition-all transform hover:scale-105"
@@ -289,13 +345,13 @@ const ItineraryPlanner = () => {
           )}
 
           {/* Itinerary Items List */}
-          <div className="space-y-3.5 flex-1 overflow-y-auto pr-1">
+          <div className="space-y-3 flex-1 overflow-y-auto pr-1">
             {plan.length === 0 ? (
               <div className="flex flex-col items-center justify-center p-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200 my-auto">
                 <Sparkles className="h-10 w-10 text-indigo-400 mb-3 animate-pulse" />
                 <h4 className="font-semibold text-slate-700 mb-1">No destinations yet</h4>
                 <p className="text-xs text-slate-500 max-w-xs mb-4">
-                  Use the <strong>AI Planner</strong> to automatically generate a tailored trip with hotels, transit, and sights, or add places manually.
+                  Use the <strong>AI Planner</strong> to automatically generate a day-by-day trip with hotels, trains/flights, food, and direct booking links!
                 </p>
                 <button
                   onClick={() => setShowAiModal(true)}
@@ -306,82 +362,111 @@ const ItineraryPlanner = () => {
                 </button>
               </div>
             ) : (
-              plan.map((item, idx) => (
-                <div key={idx} className="group flex gap-3 p-3.5 border border-slate-100 rounded-xl hover:shadow-md transition-all cursor-pointer bg-slate-50/70 hover:bg-white relative">
-                  <div className="flex flex-col items-center">
-                    <div className="h-7 w-7 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center font-bold text-xs">
-                      {idx + 1}
-                    </div>
-                    {idx !== plan.length - 1 && <div className="w-0.5 h-full bg-slate-200 my-1"></div>}
-                  </div>
-                  <div className="flex-1 pr-6">
-                    <div className="flex items-center gap-2 flex-wrap mb-1">
-                      {getTypeBadge(item.type)}
-                      <span className="text-[11px] text-slate-500 flex items-center gap-1">
-                        <Clock className="h-3 w-3" /> {item.notes || item.time}
-                      </span>
-                    </div>
+              plan.map((item, idx) => {
+                const itemDateStr = item.date 
+                  ? new Date(item.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+                  : '';
 
-                    <h3 className="font-semibold text-slate-800 text-sm">
-                      {item.location}
-                    </h3>
-                    
-                    {item.desc && (
-                      <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">
-                        {item.desc}
-                      </p>
-                    )}
+                return (
+                  <div key={idx} className="group flex gap-3 p-3.5 border border-slate-100 rounded-xl hover:shadow-md transition-all cursor-pointer bg-slate-50/70 hover:bg-white relative">
+                    <div className="flex flex-col items-center">
+                      <div className="h-7 w-7 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center font-bold text-xs">
+                        {idx + 1}
+                      </div>
+                      {idx !== plan.length - 1 && <div className="w-0.5 h-full bg-slate-200 my-1"></div>}
+                    </div>
+                    <div className="flex-1 pr-6">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        {getTypeBadge(item.type)}
+                        {item.dayNumber && (
+                          <span className="text-[11px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
+                            Day {item.dayNumber}
+                          </span>
+                        )}
+                        <span className="text-[11px] text-slate-500 flex items-center gap-1">
+                          <Clock className="h-3 w-3" /> 
+                          {itemDateStr ? `${itemDateStr} • ` : ''}{item.time || item.notes}
+                        </span>
+                      </div>
 
-                    {/* Direct Booking Link */}
-                    {item.bookingLink && (
-                      <div className="mt-2.5">
+                      <h3 className="font-semibold text-slate-800 text-sm">
+                        {item.location}
+                      </h3>
+                      
+                      {item.notes && item.notes !== item.time && (
+                        <p className="text-[11px] text-slate-500 bg-slate-100/80 rounded-md px-2 py-1 mt-1">
+                          💡 {item.notes}
+                        </p>
+                      )}
+
+                      {item.desc && (
+                        <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">
+                          {item.desc}
+                        </p>
+                      )}
+
+                      {/* Action buttons: Booking Link & Google Maps Link */}
+                      <div className="mt-2.5 flex flex-wrap gap-2">
+                        {item.bookingLink && (
+                          <a
+                            href={item.bookingLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/60 px-2.5 py-1 rounded-lg transition-colors"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <span>Direct Booking / App Link</span>
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        )}
+
                         <a
-                          href={item.bookingLink}
+                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.location)}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 text-xs font-medium text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/60 px-2.5 py-1 rounded-lg transition-colors"
+                          className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-lg transition-colors"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <span>Direct Booking / App Link</span>
-                          <ExternalLink className="h-3 w-3" />
+                          <MapPin className="h-3 w-3 text-red-500" />
+                          <span>Google Maps</span>
                         </a>
                       </div>
-                    )}
-                  </div>
+                    </div>
 
-                  <button 
-                    onClick={() => handleDeletePlace(item._id)}
-                    className="absolute right-2.5 top-2.5 p-1.5 text-slate-300 hover:bg-red-50 hover:text-red-500 rounded transition-colors opacity-0 group-hover:opacity-100"
-                    title="Delete item"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              ))
+                    <button 
+                      onClick={() => handleDeletePlace(item._id)}
+                      className="absolute right-2.5 top-2.5 p-1.5 text-slate-300 hover:bg-red-50 hover:text-red-500 rounded transition-colors opacity-0 group-hover:opacity-100"
+                      title="Delete item"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                );
+              })
             )}
           </div>
         </div>
 
-        {/* Right Panel: Map */}
-        <div className="flex-1 bg-slate-200 rounded-2xl overflow-hidden relative border border-slate-200">
+        {/* Right Panel: Google Map */}
+        <div className="flex-1 bg-slate-200 rounded-2xl overflow-hidden relative border border-slate-200 shadow-sm">
            <MapContainer plan={plan} />
         </div>
       </div>
 
-      {/* AI Planner Modal */}
+      {/* AI Planner Modal with High z-index to overlay Leaflet */}
       {showAiModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4 overflow-y-auto">
           <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[90vh]">
             
             {/* Modal Header */}
-            <div className="bg-linear-to-r from-purple-600 via-indigo-600 to-blue-600 p-5 text-white flex justify-between items-start">
+            <div className="bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 p-5 text-white flex justify-between items-start">
               <div>
                 <div className="flex items-center gap-2">
                   <Sparkles className="h-5 w-5 text-yellow-300" />
                   <h3 className="font-bold text-lg">AI Automated Itinerary Planner</h3>
                 </div>
                 <p className="text-xs text-indigo-100 mt-1">
-                  Powered by Gemini with fallback models. Generates trains, stays, food & direct booking links.
+                  Day-by-day scheduling with trains, hotels, food & direct booking links.
                 </p>
               </div>
               <button 
@@ -411,12 +496,13 @@ const ItineraryPlanner = () => {
                   <div>
                     <h4 className="font-semibold text-slate-800 text-base">Planning Your Perfect Trip...</h4>
                     <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
-                      Gemini is researching transport, hotels, local cuisine, and generating direct booking links. Please hold on!
+                      Gemini AI is scheduling days, sourcing trains & stays, finding restaurants, and creating Google Maps & booking links. Please wait!
                     </p>
                   </div>
                 </div>
               ) : (
                 <form onSubmit={handleAiGenerate} id="ai-planner-form" className="space-y-4">
+                  {/* Destination */}
                   <div>
                     <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                       Destination <span className="text-red-500">*</span>
@@ -434,54 +520,87 @@ const ItineraryPlanner = () => {
                     </div>
                   </div>
 
+                  {/* Starting From with Current Location Auto-Detect */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                        Starting From (Source Location)
+                      </label>
+                      <button
+                        type="button"
+                        onClick={handleDetectLocation}
+                        disabled={isDetectingLocation}
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 disabled:opacity-50"
+                      >
+                        {isDetectingLocation ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <LocateFixed className="h-3 w-3 text-indigo-500" />
+                        )}
+                        <span>{isDetectingLocation ? 'Detecting...' : 'Use Current Location'}</span>
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <Navigation className="h-4 w-4 text-slate-400 absolute left-3 top-3" />
+                      <input 
+                        type="text" 
+                        placeholder="e.g. Hyderabad, Mumbai, New York" 
+                        value={aiStartingFrom} 
+                        onChange={e => setAiStartingFrom(e.target.value)} 
+                        className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 bg-slate-50 focus:bg-white transition-colors" 
+                      />
+                    </div>
+                  </div>
+
+                  {/* Start Date & Days */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                        Starting From (Optional)
+                        Trip Start Date
                       </label>
                       <div className="relative">
-                        <Train className="h-4 w-4 text-slate-400 absolute left-3 top-3" />
+                        <Calendar className="h-4 w-4 text-slate-400 absolute left-3 top-3" />
                         <input 
-                          type="text" 
-                          placeholder="e.g. Mumbai or New York" 
-                          value={aiStartingFrom} 
-                          onChange={e => setAiStartingFrom(e.target.value)} 
+                          type="date" 
+                          value={aiStartDate} 
+                          onChange={e => setAiStartDate(e.target.value)} 
                           className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 bg-slate-50 focus:bg-white transition-colors" 
+                          required 
                         />
                       </div>
                     </div>
 
                     <div>
                       <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                        Trip Duration (Days)
+                        Duration (Days Staying)
                       </label>
-                      <div className="relative">
-                        <Calendar className="h-4 w-4 text-slate-400 absolute left-3 top-3" />
-                        <select
-                          value={aiDays}
-                          onChange={e => setAiDays(Number(e.target.value))}
-                          className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 bg-slate-50 focus:bg-white transition-colors"
-                        >
-                          <option value={1}>1 Day (Express)</option>
-                          <option value={2}>2 Days (Weekend)</option>
-                          <option value={3}>3 Days (Standard)</option>
-                          <option value={4}>4 Days</option>
-                          <option value={5}>5 Days</option>
-                          <option value={7}>7 Days (Full Week)</option>
-                        </select>
-                      </div>
+                      <select
+                        value={aiDays}
+                        onChange={e => setAiDays(Number(e.target.value))}
+                        className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 bg-slate-50 focus:bg-white transition-colors"
+                      >
+                        <option value={1}>1 Day (Express)</option>
+                        <option value={2}>2 Days (Weekend Trip)</option>
+                        <option value={3}>3 Days (Recommended)</option>
+                        <option value={4}>4 Days</option>
+                        <option value={5}>5 Days</option>
+                        <option value={6}>6 Days</option>
+                        <option value={7}>7 Days (1 Full Week)</option>
+                        <option value={10}>10 Days</option>
+                      </select>
                     </div>
                   </div>
 
+                  {/* Budget Style */}
                   <div>
                     <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                       Budget Style
                     </label>
                     <div className="grid grid-cols-3 gap-2">
                       {[
-                        { id: 'budget', label: 'Budget 🎒', desc: 'Hostels & Transit' },
+                        { id: 'budget', label: 'Budget 🎒', desc: 'Hostels & Trains' },
                         { id: 'moderate', label: 'Moderate 🧳', desc: 'Standard Hotels' },
-                        { id: 'luxury', label: 'Luxury ✨', desc: 'Premium Stays' },
+                        { id: 'luxury', label: 'Luxury ✨', desc: 'Top Resorts & Dining' },
                       ].map((item) => (
                         <button
                           key={item.id}
@@ -500,12 +619,13 @@ const ItineraryPlanner = () => {
                     </div>
                   </div>
 
+                  {/* Preferences */}
                   <div>
                     <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                      Preferences & Interests
+                      Preferences & Activities
                     </label>
                     <textarea 
-                      placeholder="e.g. Vegetarian food, love historic monuments, scenic beach walks, avoid overly crowded spots..." 
+                      placeholder="e.g. Vegetarian food, love historic spots, scenic beach sunsets, family friendly..." 
                       value={aiPreferences} 
                       onChange={e => setAiPreferences(e.target.value)} 
                       rows={2}
@@ -529,7 +649,7 @@ const ItineraryPlanner = () => {
                 <button
                   type="submit"
                   form="ai-planner-form"
-                  className="flex items-center gap-2 px-5 py-2 text-xs font-semibold bg-linear-to-r from-purple-600 to-indigo-600 text-white rounded-xl hover:from-purple-700 hover:to-indigo-700 shadow-md shadow-indigo-200 transition-all"
+                  className="flex items-center gap-2 px-5 py-2 text-xs font-semibold bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl hover:from-purple-700 hover:to-indigo-700 shadow-md shadow-indigo-200 transition-all"
                 >
                   <Sparkles className="h-3.5 w-3.5 text-yellow-300" />
                   Generate Itinerary

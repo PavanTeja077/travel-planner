@@ -44,11 +44,13 @@ const Expenses = () => {
     e.preventDefault();
     if (!newDesc || !newAmount) return;
 
+    const payerToSubmit = (newPayer && newPayer !== 'Me') ? newPayer : user?._id;
+
     try {
       await axios.post(`/expenses/${id}`, {
         desc: newDesc,
         amount: newAmount,
-        paidBy: newPayer // The real user ID of the payer
+        paidBy: payerToSubmit // The real user ID of the selected payer
       });
       setNewDesc('');
       setNewAmount('');

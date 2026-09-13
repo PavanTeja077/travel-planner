@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const { getItinerary, addDestination, createItinerary, getItineraries, addMember, updateItinerary, deleteItinerary, deleteDestination, generateAIItinerary } = require('../controllers/itineraryController');
+const { getItinerary, addDestination, createItinerary, getItineraries, addMember, updateItinerary, deleteItinerary, deleteDestination, generateAIItinerary, createAIItinerary } = require('../controllers/itineraryController');
 const { protect } = require('../middleware/authMiddleware');
 
 router.route('/').post(protect, createItinerary).get(protect, getItineraries);
+router.post('/ai-create', protect, createAIItinerary);
 router.route('/:id').get(protect, getItinerary).put(protect, updateItinerary).delete(protect, deleteItinerary);
 router.route('/:id/destinations').post(protect, addDestination);
 router.route('/:id/destinations/:destId').delete(protect, deleteDestination);
