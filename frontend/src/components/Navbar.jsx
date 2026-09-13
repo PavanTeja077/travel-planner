@@ -16,7 +16,7 @@ const Navbar = () => {
     <nav className="bg-white border-b border-slate-200 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16 items-center">
-          <Link to={user ? "/dashboard" : "/"} className="flex items-center gap-2">
+          <Link to="/dashboard" className="flex items-center gap-2">
             <div className="bg-primary-600 p-2 rounded-xl shadow-sm">
               <Compass className="h-6 w-6 text-white" />
             </div>
