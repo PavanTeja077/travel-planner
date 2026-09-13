@@ -1,8 +1,8 @@
 import { useEffect, useState, useMemo } from 'react';
-import { MapContainer as LeafletMap, TileLayer, Marker, Popup, useMap, ZoomControl } from 'react-leaflet';
+import { MapContainer as LeafletMap, TileLayer, Marker, Popup, useMap, ZoomControl, Circle } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import { ExternalLink, Navigation, Compass, Hotel, Utensils, Train, MapPin, Layers } from 'lucide-react';
+import { ExternalLink, Navigation, Compass, Hotel, Utensils, Train, MapPin, Layers, LocateFixed, Loader2 } from 'lucide-react';
 
 // Tile provider configurations (including authentic Google Maps tile layers)
 const MAP_STYLES = {
@@ -32,7 +32,36 @@ const MAP_STYLES = {
   }
 };
 
-// Custom SVG Icons for different categories
+// Pulsing Blue Dot for Google Maps-style user location
+const userLocationIcon = L.divIcon({
+  html: `
+    <div style="position: relative; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center;">
+      <div style="
+        position: absolute;
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        background: rgba(37, 99, 235, 0.35);
+        animation: ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+      "></div>
+      <div style="
+        position: relative;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #2563EB;
+        border: 2.5px solid #FFFFFF;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+      "></div>
+    </div>
+  `,
+  className: 'custom-user-location-marker',
+  iconSize: [26, 26],
+  iconAnchor: [13, 13],
+  popupAnchor: [0, -14]
+});
+
+// Custom SVG Icons for itinerary categories
 const createCustomIcon = (type, index) => {
   let bgColor = '#10B981'; // emerald for activity
   let iconSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>`;
@@ -98,24 +127,90 @@ const createCustomIcon = (type, index) => {
 
 const defaultCenter = [15.2993, 74.1240]; // Goa
 
-// Auto-fit map to markers with smooth animation
-const MapBounds = ({ plan }) => {
+// Auto-fit map to markers with smooth animation (only if not currently focused on user)
+const MapBounds = ({ plan, isFocusedOnUser }) => {
   const map = useMap();
   useEffect(() => {
-    if (plan && plan.length > 0) {
+    if (!isFocusedOnUser && plan && plan.length > 0) {
       const validPoints = plan.filter(p => p.lat && p.lng).map(p => [p.lat, p.lng]);
       if (validPoints.length > 0) {
         const bounds = L.latLngBounds(validPoints);
         map.fitBounds(bounds, { padding: [60, 60], maxZoom: 15, animate: true });
       }
     }
-  }, [plan, map]);
+  }, [plan, map, isFocusedOnUser]);
   return null;
+};
+
+// Component inside LeafletMap for Location Tracking
+const LocationController = ({ userLocation, setUserLocation, isLocating, setIsLocating, setIsFocusedOnUser }) => {
+  const map = useMap();
+
+  const handleLocateMe = () => {
+    if (!navigator.geolocation) {
+      alert('Geolocation is not supported by your browser.');
+      return;
+    }
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude, accuracy } = pos.coords;
+        const loc = { lat: latitude, lng: longitude, accuracy };
+        setUserLocation(loc);
+        setIsFocusedOnUser(true);
+        map.flyTo([latitude, longitude], 15, { animate: true, duration: 1.2 });
+        setIsLocating(false);
+      },
+      (err) => {
+        console.warn('Location error:', err);
+        setIsLocating(false);
+        alert('Could not retrieve your location. Please check browser location permissions.');
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
+  return (
+    <div className="absolute bottom-24 right-3 z-[1000] pointer-events-auto">
+      <button
+        type="button"
+        onClick={handleLocateMe}
+        disabled={isLocating}
+        title="Show my current location (like Google Maps)"
+        className="w-11 h-11 bg-white hover:bg-slate-50 text-slate-700 hover:text-indigo-600 rounded-full shadow-xl border border-slate-200/80 flex items-center justify-center transition-all transform hover:scale-105 active:scale-95 disabled:opacity-60 cursor-pointer group"
+      >
+        {isLocating ? (
+          <Loader2 className="h-5 w-5 text-indigo-600 animate-spin" />
+        ) : (
+          <LocateFixed className="h-5 w-5 text-indigo-600 group-hover:scale-110 transition-transform" />
+        )}
+      </button>
+    </div>
+  );
 };
 
 export const MapContainer = ({ plan }) => {
   const [currentStyle, setCurrentStyle] = useState('googleRoadmap');
-  const [showStyleMenu, setShowStyleMenu] = useState(false);
+  const [userLocation, setUserLocation] = useState(null);
+  const [isLocating, setIsLocating] = useState(false);
+  const [isFocusedOnUser, setIsFocusedOnUser] = useState(false);
+
+  // Try to softly obtain user location on mount if granted
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setUserLocation({
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            accuracy: pos.coords.accuracy
+          });
+        },
+        () => {}, // silent fallback if not granted
+        { timeout: 5000 }
+      );
+    }
+  }, []);
 
   const activeStyle = MAP_STYLES[currentStyle] || MAP_STYLES.googleRoadmap;
 
@@ -154,8 +249,48 @@ export const MapContainer = ({ plan }) => {
           attribution={activeStyle.attribution}
           maxZoom={20}
         />
-        <MapBounds plan={plan} />
         
+        <MapBounds plan={plan} isFocusedOnUser={isFocusedOnUser} />
+
+        {/* Location Controller with Google Maps Style Crosshair Button */}
+        <LocationController 
+          userLocation={userLocation}
+          setUserLocation={setUserLocation}
+          isLocating={isLocating}
+          setIsLocating={setIsLocating}
+          setIsFocusedOnUser={setIsFocusedOnUser}
+        />
+
+        {/* User's Current Location Marker (Pulsing Google Maps Blue Dot & Accuracy Circle) */}
+        {userLocation && (
+          <>
+            <Circle 
+              center={[userLocation.lat, userLocation.lng]} 
+              radius={Math.min(userLocation.accuracy || 40, 500)}
+              pathOptions={{ 
+                color: '#3B82F6', 
+                fillColor: '#3B82F6', 
+                fillOpacity: 0.12, 
+                weight: 1.5 
+              }} 
+            />
+            <Marker position={[userLocation.lat, userLocation.lng]} icon={userLocationIcon}>
+              <Popup>
+                <div className="p-1.5">
+                  <div className="flex items-center gap-2 font-bold text-sm text-blue-600">
+                    <span className="w-2.5 h-2.5 rounded-full bg-blue-600 animate-pulse"></span>
+                    Your Current Location
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Latitude: {userLocation.lat.toFixed(4)}, Longitude: {userLocation.lng.toFixed(4)}
+                  </p>
+                </div>
+              </Popup>
+            </Marker>
+          </>
+        )}
+        
+        {/* Itinerary Destination Markers */}
         {plan && plan.length > 0 ? (
           plan.map((place, idx) => (
             place.lat && place.lng ? (
@@ -222,14 +357,16 @@ export const MapContainer = ({ plan }) => {
             ) : null
           ))
         ) : (
-          <Marker position={defaultCenter} icon={createCustomIcon('activity', 0)}>
-            <Popup>
-              <div className="p-1">
-                <strong>Goa, India</strong> <br /> 
-                Generate an itinerary or add destinations to see them on Google Maps!
-              </div>
-            </Popup>
-          </Marker>
+          !userLocation && (
+            <Marker position={defaultCenter} icon={createCustomIcon('activity', 0)}>
+              <Popup>
+                <div className="p-1">
+                  <strong>Goa, India</strong> <br /> 
+                  Generate an itinerary or click the location button to find yourself!
+                </div>
+              </Popup>
+            </Marker>
+          )
         )}
       </LeafletMap>
     </div>
