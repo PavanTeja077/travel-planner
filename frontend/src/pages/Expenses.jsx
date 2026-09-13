@@ -3,6 +3,7 @@ import { IndianRupee, PieChart, Plus, ArrowRightLeft, Trash2 } from 'lucide-reac
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import useUserStore from '../store/userStore';
+import useThemeStore from '../store/themeStore';
 
 const Expenses = () => {
   const { id } = useParams();
@@ -73,28 +74,35 @@ const Expenses = () => {
 
   const totalSpend = expenses.reduce((sum, exp) => sum + exp.amount, 0);
 
+  const { currentTheme } = useThemeStore();
+
   return (
-    <div className="flex flex-col h-[85vh]">
-      {/* Sub Navigation */}
-      <div className="flex gap-4 mb-4 border-b border-slate-200 pb-4">
-        <Link to={`/planner/${id}`} className="font-medium text-slate-500 hover:text-slate-800">Itinerary</Link>
-        <Link to={`/expenses/${id}`} className="font-semibold text-primary-600 border-b-2 border-primary-600 pb-1">Expenses</Link>
-        <Link to={`/chat/${id}`} className="font-medium text-slate-500 hover:text-slate-800">Chat & Docs</Link>
+    <div className="flex flex-col space-y-6">
+      {/* Luxury Capsule Sub Navigation */}
+      <div className="flex items-center gap-1.5 bg-slate-100/90 p-1 rounded-full w-fit border border-slate-200/80 shadow-2xs">
+        <Link to={`/planner/${id}`} className="px-4 py-1.5 rounded-full text-xs font-semibold text-slate-600 hover:text-slate-900 transition-colors">Itinerary</Link>
+        <Link to={`/expenses/${id}`} className="px-4 py-1.5 rounded-full text-xs font-bold bg-white text-slate-900 shadow-xs">Expenses</Link>
+        <Link to={`/chat/${id}`} className="px-4 py-1.5 rounded-full text-xs font-semibold text-slate-600 hover:text-slate-900 transition-colors">Chat & Docs</Link>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1 overflow-hidden">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1">
         {/* Left Col: Overview & Add Expense */}
-        <div className="col-span-2 flex flex-col gap-6 overflow-y-auto">
-          <div className="glass-card p-6 flex justify-between items-center bg-gradient-to-r from-primary-600 to-indigo-600 text-white">
+        <div className="lg:col-span-2 flex flex-col gap-6">
+          <div 
+            className="p-6 sm:p-8 rounded-3xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 text-white shadow-xl shadow-slate-200/60"
+            style={{ 
+              background: `linear-gradient(135deg, ${currentTheme.primary} 0%, #1e1b4b 60%, ${currentTheme.accent} 100%)` 
+            }}
+          >
             <div>
-              <h2 className="text-xl font-medium opacity-90">Total Group Trip Spend</h2>
-              <p className="text-4xl font-bold flex items-center mt-2"><IndianRupee className="h-8 w-8" /> {totalSpend}</p>
+              <span className="text-xs uppercase tracking-wider font-bold text-slate-200">Total Group Trip Spend</span>
+              <p className="text-4xl font-extrabold flex items-center mt-1.5 text-white"><IndianRupee className="h-8 w-8" /> {totalSpend.toLocaleString()}</p>
             </div>
             <button 
               onClick={() => setShowAddForm(!showAddForm)}
-              className="bg-white text-primary-600 px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-slate-50"
+              className="bg-white text-slate-900 px-5 py-2.5 rounded-full font-bold text-xs flex items-center gap-2 hover:bg-slate-100 shadow-sm transition-all"
             >
-              <Plus className="h-5 w-5" /> {showAddForm ? 'Cancel' : 'Add Expense'}
+              <Plus className="h-4 w-4" /> {showAddForm ? 'Cancel' : 'Add Expense'}
             </button>
           </div>
 

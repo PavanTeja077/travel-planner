@@ -245,17 +245,17 @@ const ItineraryPlanner = () => {
   };
 
   return (
-    <div className="flex flex-col h-[85vh]">
-      {/* Sub Navigation */}
-      <div className="flex gap-4 mb-4 border-b border-slate-200 pb-4">
-        <Link to={`/planner/${id}`} className="font-semibold text-primary-600 border-b-2 border-primary-600 pb-1">Itinerary</Link>
-        <Link to={`/expenses/${id}`} className="font-medium text-slate-500 hover:text-slate-800">Expenses</Link>
-        <Link to={`/chat/${id}`} className="font-medium text-slate-500 hover:text-slate-800">Chat & Docs</Link>
+    <div className="flex flex-col space-y-4">
+      {/* Luxury Capsule Sub Navigation */}
+      <div className="flex items-center gap-1.5 bg-slate-100/90 p-1 rounded-full w-fit border border-slate-200/80 shadow-2xs">
+        <Link to={`/planner/${id}`} className="px-4 py-1.5 rounded-full text-xs font-bold bg-white text-slate-900 shadow-xs">Itinerary</Link>
+        <Link to={`/expenses/${id}`} className="px-4 py-1.5 rounded-full text-xs font-semibold text-slate-600 hover:text-slate-900 transition-colors">Expenses</Link>
+        <Link to={`/chat/${id}`} className="px-4 py-1.5 rounded-full text-xs font-semibold text-slate-600 hover:text-slate-900 transition-colors">Chat & Docs</Link>
       </div>
 
-      <div className="flex flex-1 gap-6 overflow-hidden">
+      <div className="flex flex-col lg:flex-row flex-1 gap-6">
         {/* Left Panel: Itinerary List */}
-        <div className="w-1/2 lg:w-5/12 bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-col overflow-y-auto">
+        <div className="w-full lg:w-5/12 bg-white rounded-3xl shadow-sm border border-slate-200/80 p-5 flex flex-col h-[520px] lg:h-[80vh] overflow-y-auto">
           
           {/* Group Members Section */}
           <div className="mb-4 p-3.5 bg-slate-50 rounded-xl border border-slate-100">
@@ -457,7 +457,7 @@ const ItineraryPlanner = () => {
         </div>
 
         {/* Right Panel: Google Map */}
-        <div className="flex-1 bg-slate-200 rounded-2xl overflow-hidden relative border border-slate-200 shadow-sm">
+        <div className="w-full lg:flex-1 h-[450px] lg:h-[80vh] min-h-[400px] bg-slate-200 rounded-3xl overflow-hidden relative border border-slate-200/80 shadow-sm">
            <MapContainer plan={plan} />
         </div>
       </div>
