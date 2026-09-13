@@ -180,4 +180,60 @@ const deleteDestination = async (req, res) => {
   }
 };
 
-module.exports = { getItinerary, addDestination, createItinerary, getItineraries, addMember, updateItinerary, deleteItinerary, deleteDestination };
+// @route   POST /api/itineraries/:id/ai-generate
+// @desc    Generate AI itinerary recommendations and add them
+const generateAIItinerary = async (req, res) => {
+  try {
+    const { destination, startingFrom, days, budget, preferences } = req.body;
+    if (!destination) {
+      return res.status(400).json({ message: 'Destination is required' });
+    }
+
+    const itinerary = await Itinerary.findById(req.params.id);
+    if (!itinerary) {
+      return res.status(404).json({ message: 'Itinerary not found' });
+    }
+
+    const { generateItineraryPlan } = require('../utils/geminiService');
+    const generatedItems = await generateItineraryPlan({
+      destination,
+      startingFrom,
+      days: Number(days) || 3,
+      budget: budget || 'moderate',
+      preferences: preferences || ''
+    });
+
+    // Append generated items to destinations
+    itinerary.destinations.push(...generatedItems);
+
+    // Update title if it's default
+    if (itinerary.title === 'New Trip' || itinerary.title === 'Trip Planner') {
+      itinerary.title = `Trip to ${destination}`;
+    }
+
+    await itinerary.save();
+
+    res.json({
+      message: 'AI Itinerary generated successfully',
+      destinations: itinerary.destinations,
+      title: itinerary.title
+    });
+  } catch (error) {
+    console.error('AI Generation Error:', error);
+    res.status(500).json({
+      message: error.message || 'Failed to generate AI itinerary'
+    });
+  }
+};
+
+module.exports = {
+  getItinerary,
+  addDestination,
+  createItinerary,
+  getItineraries,
+  addMember,
+  updateItinerary,
+  deleteItinerary,
+  deleteDestination,
+  generateAIItinerary
+};

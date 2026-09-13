@@ -11,7 +11,10 @@ const itinerarySchema = new mongoose.Schema({
     lat: { type: Number },
     lng: { type: Number },
     date: { type: Date },
-    notes: { type: String }
+    notes: { type: String },
+    desc: { type: String },
+    type: { type: String },
+    bookingLink: { type: String }
   }],
   documents: [{
     name: { type: String },

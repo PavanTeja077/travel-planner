@@ -45,9 +45,19 @@ export const MapContainer = ({ plan }) => {
           place.lat && place.lng && (
             <Marker key={idx} position={[place.lat, place.lng]}>
               <Popup>
-                <strong>{place.location}</strong> <br />
-                {place.notes && <span>{place.notes}<br/></span>}
-                {place.desc}
+                <div className="font-semibold text-sm">{place.location}</div>
+                {place.notes && <div className="text-xs text-slate-500 my-0.5">{place.notes}</div>}
+                {place.desc && <div className="text-xs text-slate-700 mt-1">{place.desc}</div>}
+                {place.bookingLink && (
+                  <a
+                    href={place.bookingLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-block mt-2 text-xs font-semibold text-blue-600 hover:text-blue-800 underline"
+                  >
+                    Direct Booking / Info &rarr;
+                  </a>
+                )}
               </Popup>
             </Marker>
           )
