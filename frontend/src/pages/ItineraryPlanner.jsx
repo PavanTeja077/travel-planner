@@ -186,7 +186,7 @@ const ItineraryPlanner = () => {
         startDate: aiStartDate,
         budget: aiBudget,
         preferences: aiPreferences
-      });
+      }, { timeout: 60000 });
 
       if (res.data) {
         if (res.data.destinations) setPlan(res.data.destinations);
@@ -200,7 +200,16 @@ const ItineraryPlanner = () => {
       }
     } catch (err) {
       console.error('AI Generation Failed:', err);
-      setAiError(err.response?.data?.message || 'Failed to generate itinerary. Please try again.');
+      const serverMessage = err.response?.data?.message;
+      if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+        setAiError('The AI server took longer than expected. If your backend is waking up, please retry in a moment.');
+      } else if (serverMessage) {
+        setAiError(serverMessage);
+      } else if (err.message) {
+        setAiError(err.message);
+      } else {
+        setAiError('Failed to generate itinerary. Please check if GEMINI_API_KEY is set in your backend hosting environment variables.');
+      }
     } finally {
       setIsGeneratingAi(false);
     }

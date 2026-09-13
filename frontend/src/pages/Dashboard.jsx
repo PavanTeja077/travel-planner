@@ -117,7 +117,7 @@ const Dashboard = () => {
         startDate: aiStartDate,
         budget: aiBudget,
         preferences: aiPreferences
-      });
+      }, { timeout: 60000 });
 
       if (res.data && res.data._id) {
         navigate(`/planner/${res.data._id}`);
@@ -126,7 +126,16 @@ const Dashboard = () => {
       }
     } catch (err) {
       console.error('AI Create Trip Failed:', err);
-      setAiError(err.response?.data?.message || 'Failed to generate itinerary. Please try again.');
+      const serverMessage = err.response?.data?.message;
+      if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+        setAiError('The server took too long to respond. If your backend is waking up from sleep, please try again in a few seconds.');
+      } else if (serverMessage) {
+        setAiError(serverMessage);
+      } else if (err.message) {
+        setAiError(err.message);
+      } else {
+        setAiError('Failed to generate itinerary. Please verify your backend server is running and try again.');
+      }
       setIsGeneratingAi(false);
     }
   };
